@@ -1,0 +1,68 @@
+name: codeql
+
+trigger:
+- azure-pipelines-template-example
+ 
+pool:
+ vmImage: 'ubuntu-latest'
+ 
+variables:
+  codeql-db-name: js-db
+  sarif-file-name: results
+
+parameters:
+  - name: runExtendedSecurity
+    default: true
+    type: boolean
+  - name: language
+    type: string
+    default: js
+    values:
+    - js
+    - java
+    - python 
+ 
+jobs:
+- job:
+  steps:
+  - script: |
+      wget https://github.com/github/codeql-action/releases/latest/download/codeql-bundle-linux64.tar.gz
+      tar -xvzf ./codeql-bundle-linux64.tar.gz
+      echo '##vso[task.setvariable variable=path]$(PATH):./codeql'
+    displayName: 'Get latest CodeQL package. Install on Agent. Add to PATH'
+ 
+
+  - script: |
+      codeql database create ${{parameters.language}}-db \
+      --language=javascript
+    displayName: 'Initialize CodeQL and create a CodeQL database'
+ 
+
+
+  - script: |
+      codeql database analyze ${{parameters.language}}-db  \
+      javascript-code-scanning.qls \
+      --format=sarif-latest \
+      --output=$(sarif-file-name).sarif
+    displayName: 'Populate the CodeQL runner databases and analyze them'
+
+# - job:
+#   steps:
+#   - script: |
+#       codeql database analyze ${{parameters.language}}-db  \
+#       name-of-extended \
+#       --format=sarif-latest \
+#       --output=$(sarif-file-name)-extended.sarif
+#     displayName: 'Running with extended security pack'
+#     condition: eq(parameters.runExtendedSecurity, 'true')
+  
+  - script: |
+      echo $(GITHUB_PAT) | \
+      ./codeql/codeql github upload-results \
+      --repository=$(BUILD.REPOSITORY.NAME) \
+      --ref=$(BUILD.SOURCEBRANCH) \
+      --commit=$(BUILD.SOURCEVERSION) \
+      --sarif=$(sarif-file-name).sarif \
+      --github-auth-stdin
+    displayName: "Upload SARIF results"
+
