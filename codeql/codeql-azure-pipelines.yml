@@ -7,7 +7,6 @@ pool:
  vmImage: 'ubuntu-latest'
  
 variables:
-  codeql-db-name: js-db
   sarif-file-name: results
 
 parameters:
@@ -16,10 +15,9 @@ parameters:
     type: boolean
   - name: language
     type: string
-    default: js
+    default: javascript
     values:
-    - js
-    - java
+    - javascript
     - python 
  
 jobs:
@@ -34,27 +32,26 @@ jobs:
 
   - script: |
       codeql database create ${{parameters.language}}-db \
-      --language=javascript
+      --language=${{parameters.language}}
     displayName: 'Initialize CodeQL and create a CodeQL database'
  
 
 
   - script: |
       codeql database analyze ${{parameters.language}}-db  \
-      javascript-code-scanning.qls \
+      ${{parameters.language}}-code-scanning.qls \
       --format=sarif-latest \
       --output=$(sarif-file-name).sarif
     displayName: 'Populate the CodeQL runner databases and analyze them'
 
-# - job:
-#   steps:
-#   - script: |
-#       codeql database analyze ${{parameters.language}}-db  \
-#       name-of-extended \
-#       --format=sarif-latest \
-#       --output=$(sarif-file-name)-extended.sarif
-#     displayName: 'Running with extended security pack'
-#     condition: eq(parameters.runExtendedSecurity, 'true')
+
+  # - script: |
+  #     codeql database analyze ${{parameters.language}}-db  \
+  #     name-of-extended \
+  #     --format=sarif-latest \
+  #     --output=$(sarif-file-name)-extended.sarif
+  #   displayName: 'Running with extended security pack'
+  #   condition: eq(parameters.runExtendedSecurity, 'true')
   
   - script: |
       echo $(GITHUB_PAT) | \
@@ -65,4 +62,15 @@ jobs:
       --sarif=$(sarif-file-name).sarif \
       --github-auth-stdin
     displayName: "Upload SARIF results"
+
+  - script: |
+      echo $(GITHUB_PAT) | \
+      ./codeql/codeql github upload-results \
+      --repository=$(BUILD.REPOSITORY.NAME) \
+      --ref=$(BUILD.SOURCEBRANCH) \
+      --commit=$(BUILD.SOURCEVERSION) \
+      --sarif=$(sarif-file-name)-extended.sarif \
+      --github-auth-stdin
+    displayName: 'Upload Extended Security SARIF Results'
+    condition: eq(parameters.runExtendedSecurity, 'true')
 
